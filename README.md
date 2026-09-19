@@ -1,3 +1,5 @@
+<img width="878" height="575" alt="Screenshot 2026-09-18 at 09 54 00" src="https://github.com/user-attachments/assets/565c38e1-cc4c-48fa-b36f-086b373ed479" />
+
 # Games Compendium
 
 A Python command-line game collection containing three different games: **Higher or Lower, Quizza, and WordL**.
