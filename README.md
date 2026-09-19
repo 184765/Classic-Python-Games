@@ -1,5 +1,8 @@
 <img width="878" height="575" alt="Screenshot 2026-09-18 at 09 54 00" src="https://github.com/user-attachments/assets/565c38e1-cc4c-48fa-b36f-086b373ed479" />
 
+# Warning
+The website that you tried was not created by me; however, the game follows the generalised format. The game is fully textbased unike the website used to demonstrate it. Hope that clears any further confusion.
+
 # Games Compendium
 
 A Python command-line game collection containing three different games: **Higher or Lower, Quizza, and WordL**.
