@@ -4,7 +4,7 @@
 score_list = []
 total_rounds_list = []
 username_list = []
-ability_list = ["50/50", "skip", "double"]
+ability_list = ["50/50", "skip", "double", "1", "2", "3", "help"]
 options_list = ["A", "B", "C", "D"]
 
 # Predefined Variables
@@ -15,27 +15,108 @@ skip_uses = 0
 double_uses = 0
 
 
-def quizza_view_scores():
-    """Display score history during this current run of the program."""
+def quizza_view_scores(legacy, global_delay):
+    """Display score history during this current run."""
+    from game_interface_ui import game_ui
+
     if not score_list:
-        print("No past scores yet.")
+        game_ui("No past scores yet.", legacy, global_delay)
         return []
 
-    print("Past scores:")
+    messages = ["Past Scores:"]
 
+    # Combine each player's name, score and number of rounds,
+    # then number each result for display.
     for index, (score, total_rounds, username_rc) in enumerate(
-        zip(score_list, total_rounds_list, username_list), start=1
+        zip(score_list, total_rounds_list, username_list),
+        start=1
     ):
-        print(f"{index}. {username_rc}: Score: {score}/{total_rounds}")
+        messages.append(
+            f"{index}. {username_rc}: {score}/{total_rounds}"
+        )
+
+    game_ui(messages, legacy, global_delay)
+
     return list(zip(score_list, total_rounds_list, username_list))
 
 
-def quizza_game():
+def quizza_ability_shop(
+    score, spent_points, fifty_fifty_uses,
+    skip_uses, double_uses, legacy, global_delay
+):
+    """Allow players to purchase extra ability uses."""
+    from game_interface_ui import game_ui
+
+    fifty_price = 3
+    skip_price = 10
+    double_price = 1
+
+    game_ui(
+        [
+            "Welcome to the Ability Shop!",
+            f"Available points: {score - spent_points}",
+            "",
+            f"1. 50/50 use: {fifty_price} points",
+            f"2. Skip use: {skip_price} points",
+            f"3. Double use: {double_price} points",
+            "0. Exit shop"
+        ],
+        legacy, global_delay, True
+    )
+
+    # Keep the shop open until the player chooses to leave.
+    while True:
+        points = score - spent_points
+        game_ui(f"Points remaining: {points}", legacy, 0)
+
+        choice = input("Choose an option: ").strip()
+
+        # Stop accepting purchases when player selects the exit option.
+        if choice == "0":
+            break
+
+        elif choice == "1":
+            if points >= fifty_price:
+                spent_points += fifty_price
+                fifty_fifty_uses += 1
+                game_ui("Purchased one 50/50 use!", legacy, global_delay)
+            else:
+                game_ui("Not enough points!", legacy, global_delay)
+
+        elif choice == "2":
+            if points >= skip_price:
+                spent_points += skip_price
+                skip_uses += 1
+                game_ui("Purchased one Skip use!", legacy, global_delay)
+            else:
+                game_ui("Not enough points!", legacy, global_delay)
+
+        elif choice == "3":
+            if points >= double_price:
+                spent_points += double_price
+                double_uses += 1
+                game_ui("Purchased one Double use!", legacy, global_delay)
+            else:
+                game_ui("Not enough points!", legacy, global_delay)
+
+        else:
+            game_ui(
+                "Invalid choice. Enter 0, 1, 2 or 3.",
+                legacy, global_delay
+            )
+
+    return (
+        spent_points, fifty_fifty_uses,
+        skip_uses, double_uses
+    )
+
+
+def quizza_game(global_delay, legacy):
     """Quizza game logic."""
     import random
-    import time
 
     from game_storage_quizza import quizza
+    from game_interface_ui import user_help, game_ui, game_username_ui
 
     # Variables for games
     lives = 3
@@ -44,110 +125,217 @@ def quizza_game():
     total_rounds = 0
     game_running = True
     generate = True
+    spent_points = 0
+    shop_interval = 5
+    last_shop_round = 0
 
     fifty_fifty_uses = 3
     skip_uses = 3
     double_uses = 3
 
-    username = input("Please enter your username: ")
+    game_username_ui(legacy)
+
+    username = input()
 
     while game_running is True:
-        print(f"Current Round: {total_rounds + 1}")
+        game_ui(
+            [
+                f"Current Score: {score}/{total_rounds}",
+                f"Lives remaining: {lives}",
+                f"Current Round: {total_rounds + 1}"
+            ],
+            legacy, global_delay, True
+        )
+
+        game_ui(
+            [
+                "Abilities:",
+                f"50/50 uses left: {fifty_fifty_uses}",
+                f"Skip uses left: {skip_uses}",
+                f"Double uses left: {double_uses}"
+            ],
+            legacy, global_delay
+        )
 
         if lives <= 0:
-            print(f"Game Over! Your final score is: {score}/{total_rounds}")
+            game_ui(
+                f"Game Over! Your final score is: {score}/{total_rounds}",
+                legacy, global_delay
+            )
             score_list.append(score)
             total_rounds_list.append(total_rounds)
             username_list.append(username)
             game_running = False
             break
 
+        # Select a new random question and retrieve its question text,
+        # answer options and correct answer from the question dictionary.
         if generate is True:
             random_question = random.choice(list(quizza.keys()))
             question = quizza[random_question]["question"]
             multichoice = quizza[random_question]["multi choice"]
             answer = quizza[random_question]["answer"]
 
-        print(
-            question
+        game_ui(
+            [
+                question,
+                "",
+                *multichoice,
+                "",
+                "Choose A, B, C or D,",
+                "or enter an ability."
+            ],
+            legacy, global_delay
         )
-        guess = input(
-            f"Select your option:\n"
-            f"{multichoice}\n"
-            f"or use an ability: "
-        ).strip()
+
+        guess = input("Your choice: ").strip()
         guess_upper = guess.upper()
 
         valid_abilities = {ability.upper() for ability in ability_list}
+
+        if len(multichoice) == 1:
+            # Handles all options stored in one long string
+            available_options = [
+                option.strip()[0]
+                for option in multichoice[0].split(",")
+                if option.strip()
+            ]
+        else:
+            # Handles options stored as separate strings
+            available_options = [
+                option.strip()[0]
+                for option in multichoice
+                if option.strip()
+            ]
+
         if (
-            guess_upper not in options_list
+            guess_upper not in available_options
             and guess_upper not in valid_abilities
         ):
-            print(
-                f"Invalid input. Please enter {multichoice} "
-                "or an ability."
+            game_ui(
+                [
+                    "Invalid input.",
+                    "Choose A, B, C or D,",
+                    "or enter an ability."
+                ],
+                legacy, global_delay
             )
             generate = False
             continue
 
         if guess_upper in valid_abilities:
-            if guess_upper == "50/50" and fifty_fifty_uses > 0:
-                print("50/50 ability used. Two incorrect options removed.")
+            # Remove up to two incorrect options.
+            if guess_upper in ("50/50", "1") and fifty_fifty_uses > 0:
+                incorrect_options = [
+                    option for option in multichoice
+                    if option[0] != answer
+                ]
+
+                removed_options = random.sample(
+                    incorrect_options,
+                    min(2, len(incorrect_options))
+                )
+
                 multichoice = [
                     option for option in multichoice
-                    if option[0] == answer or random.choice([True, False])
+                    if option not in removed_options
                 ]
-                print(f"New options: {multichoice}")
+
+                game_ui(
+                    [
+                        "50/50 ability used!",
+                        "Two incorrect options removed.",
+                        *multichoice
+                    ],
+                    legacy, global_delay
+                )
+
                 generate = False
                 fifty_fifty_uses -= 1
-                time.sleep(ability_wait)
                 continue
 
-            elif guess_upper == "SKIP" and skip_uses > 0:
-                print("Skip ability used. Question skipped.")
+            elif guess_upper in ("SKIP", "2") and skip_uses > 0:
+                game_ui(
+                    "Skip ability used. Question skipped.",
+                    legacy, global_delay
+                )
                 generate = True
                 skip_uses -= 1
-                time.sleep(ability_wait)
                 continue
 
-            elif guess_upper == "DOUBLE" and double_uses > 0:
-                print(
-                    "Double points ability used. "
-                    "Next correct answer will give double points."
+            elif guess_upper in ("DOUBLE", "3") and double_uses > 0:
+                # Set the score or life-loss multiplier.
+                game_ui(
+                    [
+                        "Double points ability used. ",
+                        "Next correct answer will give double points."
+                    ],
+                    legacy, global_delay
                 )
                 double = 2
                 double_uses -= 1
                 generate = False
-                time.sleep(ability_wait)
+                continue
+
+            elif guess_upper in ("HELP",):
+                user_help(global_delay, legacy)
+                generate = False
                 continue
 
             else:
-                print("No uses left for that ability.")
+                game_ui(
+                    "No uses left for that ability.",
+                    legacy, global_delay
+                )
                 generate = False
-                time.sleep(ability_wait)
                 continue
 
         guess = guess_upper
 
+        # Compare the player's answer with the correct answer and update
+        # the score, lives and completed-round count.
         if guess == answer:
-            print("Correct!")
+            game_ui(
+                "Correct!",
+                legacy, global_delay, True
+            )
             score += 1 * double
             double = 1
             total_rounds += 1
             generate = True
-            time.sleep(1)
-            if score % 3 == 0 and score != 0: # Ability regeneration system
-                if fifty_fifty_uses < 3:
-                    fifty_fifty_uses += 1
-                if double_uses < 3:
-                    double_uses += 1
+
         else:
-            print("Incorrect!")
+            game_ui(
+                "Incorrect!",
+                legacy, global_delay, True
+            )
             lives -= 1 * double
-            total_rounds += 1 * double
+            total_rounds += 1
             double = 1
-            print(f"Lives remaining: {lives}")
             generate = True
-            time.sleep(1)
+
+        # Open the shop every five completed questions.
+        if (
+            total_rounds > 0
+            and total_rounds % shop_interval == 0
+            and total_rounds != last_shop_round
+            and lives > 0
+        ):
+            (
+                spent_points,
+                fifty_fifty_uses,
+                skip_uses,
+                double_uses
+            ) = quizza_ability_shop(
+                score,
+                spent_points,
+                fifty_fifty_uses,
+                skip_uses,
+                double_uses,
+                legacy,
+                global_delay
+            )
+
+            last_shop_round = total_rounds
 
     return list(zip(score_list, total_rounds_list, username_list))

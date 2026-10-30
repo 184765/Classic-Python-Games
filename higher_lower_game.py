@@ -4,36 +4,129 @@
 score_list = []
 total_rounds_list = []
 username_list = []
-ability_list = ["percentage", "heal", "double time", "%"]
+ability_list = ["percentage", "heal", "double time", "%", "1", "2", "3",
+                "help"]
 
 # Predefined variables
 heal_uses = 0
 pecentage_uses = 0
 double_time_uses = 0
-ability_pause = 1.5
 username = ""
 
 
-def view_scores():
-    """Display score history during this current run of the program."""
+def view_scores(legacy, global_delay):
+    """Display score history during this current run."""
+    from game_interface_ui import game_ui
+
     if not score_list:
-        print("No past scores yet.")
+        game_ui(
+            "No past scores yet.",
+            legacy, global_delay
+        )
         return []
 
-    print("Past scores:")
+    messages = ["Past Scores:"]
 
+    # Pair each player's name with their score and total rounds,
+    # then number the entries for display.
     for index, (score, total_rounds, username_rc) in enumerate(
-        zip(score_list, total_rounds_list, username_list), start=1
+        zip(score_list, total_rounds_list, username_list),
+        start=1
     ):
-        print(f"{index}. {username_rc}: Score: {score}/{total_rounds}")
+        messages.append(
+            f"{index}. {username_rc}: {score}/{total_rounds}"
+        )
+
+    game_ui(messages, legacy, global_delay)
+
     return list(zip(score_list, total_rounds_list, username_list))
 
 
-def higher_or_lower():
+def ability_shop(score, spent_points, heal_uses,
+                 pecentage_uses, double_time_uses,
+                 legacy, global_delay):
+    """Allow players to buy additional ability uses."""
+    from game_interface_ui import game_ui
+    shop = True
+
+    # Prices for purchasing extra ability uses
+    heal_price = 10
+    percentage_price = 3
+    double_time_price = 1
+
+    game_ui(
+        [
+            "Welcome to the Ability Shop!",
+            f"Available points: {score - spent_points}",
+            "",
+            "0. Exit shop",
+            f"1. Heal use: {heal_price} points",
+            f"2. Percentage use: {percentage_price} points",
+            f"3. Double Time use: {double_time_price} points"
+        ],
+        legacy, global_delay, True
+    )
+
+    # Keep the shop open until the player chooses to exit.
+    while shop:
+        # Calculate the player's remaining currency
+        points = score - spent_points
+
+        game_ui(
+            f"Points remaining: {points}",
+            legacy, global_delay
+        )
+
+        choice = input("Choose an option: ").strip()
+
+        if choice == "0":
+            shop = False
+
+        elif choice == "1":
+            # Only allow a purchase if the player has enough unspent points.
+            if points >= heal_price:
+                spent_points += heal_price
+                heal_uses += 1
+                game_ui("Purchased one Heal use!", legacy, global_delay)
+            else:
+                game_ui("Not enough points!", legacy, global_delay)
+
+        elif choice == "2":
+            if points >= percentage_price:
+                spent_points += percentage_price
+                pecentage_uses += 1
+                game_ui(
+                    "Purchased one Percentage use!",
+                    legacy, global_delay
+                )
+            else:
+                game_ui("Not enough points!", legacy, global_delay)
+
+        elif choice == "3":
+            if points >= double_time_price:
+                spent_points += double_time_price
+                double_time_uses += 1
+                game_ui(
+                    "Purchased one Double Time use!",
+                    legacy, global_delay
+                )
+            else:
+                game_ui("Not enough points!", legacy, global_delay)
+
+        else:
+            game_ui("Invalid choice. Enter 0, 1, 2 or 3.",
+                    legacy, global_delay)
+
+    # Return updated values to the main game
+    return spent_points, heal_uses, pecentage_uses, double_time_uses
+
+
+def higher_or_lower(legacy, global_delay):
     """Higher or lower game logic."""
     import random
-    import time
     from game_storage_higher_lower import higher_or_lower
+    from game_interface_ui import (game_username_ui, invalid_input, user_help,
+                                   game_ui)
 
     # Variables for game
     lives = 3
@@ -45,103 +138,181 @@ def higher_or_lower():
     double = 1
     game_running = True
     generate = True
+    spent_points = 0
+    shop_interval = 5
+    last_shop_round = 0
 
+    # Select the starting item and retrieve its information from the
+    # game's item dictionary.
     random_item = random.choice(list(higher_or_lower.keys()))
 
     # Get the item and price from the dictionary
     item1 = higher_or_lower[random_item]["item"]
     price1 = higher_or_lower[random_item]["price"]
 
-    username = input("Please enter your username: ")
+    game_username_ui(legacy)
+
+    username = input()
 
     while game_running is True:
 
         if lives <= 0:
-            print(f"Game Over! Your final score is: {score}/{total_rounds}")
+            game_ui(
+                f"Game Over! Your final score is: {score}/{total_rounds}",
+                legacy, global_delay, True
+            )
             score_list.append(score)
             total_rounds_list.append(total_rounds)
             username_list.append(username)
             game_running = False
             break
 
+        # Generate a new comparison item when the previous round has finished
+        # or when the current comparison needs to be replaced.
         if generate is True:
             random_item2 = random.choice(list(higher_or_lower.keys()))
             item2 = higher_or_lower[random_item2]["item"]
             price2 = higher_or_lower[random_item2]["price"]
 
+        # Skip comparisons involving the same item or equal prices,
+        # because they do not provide a clear higher-or-lower answer.
         if (
             item1 == item2
             or price1 == price2
         ):
+            generate = True
             continue
 
-        print(f"Current Round: {total_rounds+1}")
+        game_ui(
+            # Creates a list so borders arn't printed for every line
+            [
+                f"Current Round: {total_rounds+1}",
+                f"Lives: {lives}",
+                f"Score: {score}",
+                f"Item 1: {item1}",
+                f"Price: {price1}"
+            ],
+            legacy, global_delay
+        )
 
-        print(f"Item 1: {item1}")
-        print(f"Price: {price1}")
+        game_ui(
+            [
+                "Abilities:",
+                f"Heal uses left: {heal_uses}",
+                f"Percentage uses left: {pecentage_uses}",
+                f"Double Time uses left: {double_time_uses}"
+            ],
+            legacy, global_delay
+        )
 
-        time.sleep(ability_pause)
+        game_ui(
+            [
+                f"Is {item2} worth more or less than {item1}?",
+                "Enter 'more' or 'less':"
+            ],
+            legacy, global_delay
+        )
 
-        guess = input(f"Is {item2} worth more or less than {item1}?\n"
-                      "(Enter 'more' or 'less'): ").lower()
+        guess = input().lower()
 
         if guess not in ['more', 'less'] and guess not in ability_list:
-            print("Invalid input. Please enter 'more', 'less' or an ability.")
+            print(invalid_input(global_delay, legacy))
             continue
 
+        # Process ability commands separately from normal guesses.
         if guess in ability_list:
-            if guess == 'heal' and heal_uses > 0:  # Heals the player
+            if guess in ('heal', '1') and heal_uses > 0:  # Heals
                 lives += 1
                 generate = False
                 heal_uses -= 1
-                print(f"Current Lives: {lives}")
-                print(f"Heal uses left: {heal_uses}")
-                time.sleep(ability_pause)
+                game_ui(
+                    [
+                        f"Current Lives: {lives}",
+                        f"Heal uses left: {heal_uses}"
+                    ],
+                    legacy, global_delay
+                )
 
-            elif guess in ('percentage', '%') and pecentage_uses > 0:
+            elif guess in ('percentage', '%', '2') and pecentage_uses > 0:
+                # Calculate the percentage difference between two item prices.
                 percentage = (price1 - price2) / price1 * 100
-                checked_percentage = abs(percentage) 
+                checked_percentage = abs(percentage)
                 checked_percentage = round(checked_percentage, 2)
                 generate = False
                 pecentage_uses -= 1
-                print(f"Seccond item price is higher or lower {percentage}%")
-                print(f"Percentage uses left: {pecentage_uses}")
-                time.sleep(ability_pause)
+                game_ui(
+                    [
+                        "Seccond item price is higher or lower",
+                        f"{checked_percentage}%",
+                        f"Percentage uses left: {pecentage_uses}"
+                    ],
+                    legacy, global_delay
+                )
 
-            elif guess == 'double time' and double_time_uses > 0:
+            elif guess in ('double time', '3') and double_time_uses > 0:
                 double = 2
                 generate = False
                 double_time_uses -= 1
-                print("You now can gain twice the points\n"
-                      "or lose double the lives on this question.")
-                print(f"Double time uses left: {double_time_uses}")
+                game_ui(
+                    [
+                        "You now can gain twice the points",
+                        "or lose double the lives on this question.",
+                        f"Double time uses left: {double_time_uses}"
+                    ],
+                    legacy, global_delay
+                )
+
+            elif guess == 'help':
+                user_help(global_delay, legacy)
 
         elif (
             (guess == "more" and price2 > price1)
             or (guess == "less" and price2 < price1)
         ):
-            print("Correct!")
+            game_ui(
+                "Correct!",
+                legacy, global_delay, True
+            )
             score += 1 * double
-            total_rounds += 1 * double
+            total_rounds += 1
             item1 = item2
             price1 = price2
             double = 1
             generate = True
-            if score % 3 == 0 and score != 0:
-                if pecentage_uses < 3:
-                    pecentage_uses += 1
-                    print(f"Percentage regenerated: {pecentage_uses}")
-                if double_time_uses < 3:
-                    double_time_uses += 1
-                    print(f"Double time regenerated: {double_time_uses}")
 
         else:
-            print("Incorrect!")
+            game_ui(
+                "Incorrect!",
+                legacy, global_delay, True
+            )
             lives -= 1 * double
-            total_rounds += 1 * double
+            total_rounds += 1
             item1 = item2
             price1 = price2
             double = 1
             generate = True
+
+        # Open the shop after every five completed rounds
+        if (
+            total_rounds > 0
+            and total_rounds % shop_interval == 0
+            and total_rounds != last_shop_round
+        ):
+            (
+                spent_points,
+                heal_uses,
+                pecentage_uses,
+                double_time_uses
+            ) = ability_shop(
+                score,
+                spent_points,
+                heal_uses,
+                pecentage_uses,
+                double_time_uses,
+                legacy,
+                global_delay
+            )
+
+            last_shop_round = total_rounds
 
     return score_list, total_rounds_list, username_list
